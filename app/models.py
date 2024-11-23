@@ -12,7 +12,7 @@ class UserData:
 class OAuthProvider(abc.ABC):
   
   @abc.abstractmethod
-  def request_user_data(self, state: str) -> None:
+  def get_redirect_url(self, state: str | None = None) -> None:
     pass
   
   @abc.abstractmethod

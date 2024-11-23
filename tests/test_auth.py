@@ -8,12 +8,15 @@ from app.routes import Routes
 
 
 TEST_REDIRECT_URI = "https://example.com/oauth"
+TEST_AUTH_CODE = "test auth code"
+TEST_ACCESS_TOKEN = "test access token"
 
 @pytest.fixture
 def mock_oauth(mocker: MockerFixture) -> OAuthProvider:
   mock = mocker.MagicMock(spec=OAuthProvider)
 
   mock.get_redirect_url.return_value = TEST_REDIRECT_URI
+  mock.get_access_token.return_value = TEST_ACCESS_TOKEN
 
   return mock
 
@@ -32,3 +35,17 @@ def test_login_redirects_to_auth(client: TestClient):
 
   assert response.status_code == 307
   assert response.headers["location"] == TEST_REDIRECT_URI
+
+def test_callback_uses_auth_code(client: TestClient, mock_oauth: OAuthProvider):
+  response = client.get("/callback", params={'code': TEST_AUTH_CODE})
+
+  assert response.status_code == 200
+  mock_oauth.get_access_token.assert_called_once()
+  mock_oauth.get_access_token.assert_any_call(TEST_AUTH_CODE)
+
+def test_callback_returns_user_data(client: TestClient, mock_oauth: OAuthProvider):
+  response = client.get("/callback", params={'code': TEST_AUTH_CODE})
+
+  assert response.status_code == 200
+  mock_oauth.get_user_data.assert_called_once()
+  mock_oauth.get_user_data.assert_any_call(TEST_ACCESS_TOKEN)

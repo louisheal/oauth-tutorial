@@ -10,6 +10,9 @@ from app.routes import Routes
 TEST_REDIRECT_URI = "https://example.com/oauth"
 TEST_AUTH_CODE = "test auth code"
 TEST_ACCESS_TOKEN = "test access token"
+TEST_VALID_STATE = "test valid state"
+TEST_INVALID_STATE = "test invalid state"
+
 
 @pytest.fixture
 def mock_oauth(mocker: MockerFixture) -> OAuthProvider:
@@ -27,7 +30,22 @@ def client(mock_oauth: OAuthProvider) -> TestClient:
   routes = Routes(mock_oauth)
   app.include_router(routes.router())
 
-  return TestClient(app)
+  client = TestClient(app)
+  client.cookies.set('state', TEST_VALID_STATE)
+
+  return client
+
+@pytest.fixture
+def mal_client(mock_oauth: OAuthProvider) -> TestClient:
+  app = FastAPI()
+  
+  routes = Routes(mock_oauth)
+  app.include_router(routes.router())
+
+  client = TestClient(app)
+  client.cookies.set('state', TEST_INVALID_STATE)
+
+  return client
 
 
 def test_login_redirects(client: TestClient, mock_oauth: OAuthProvider):
@@ -38,14 +56,20 @@ def test_login_redirects(client: TestClient, mock_oauth: OAuthProvider):
   mock_oauth.get_redirect_url.assert_called_once()
 
 def test_callback_uses_auth_code(client: TestClient, mock_oauth: OAuthProvider):
-  response = client.get("/callback", params={'code': TEST_AUTH_CODE})
+  response = client.get("/callback", params={
+    'code': TEST_AUTH_CODE,
+    'state': TEST_VALID_STATE,
+  })
 
   assert response.status_code == 200
   mock_oauth.get_access_token.assert_called_once()
   mock_oauth.get_access_token.assert_any_call(TEST_AUTH_CODE)
 
 def test_callback_returns_user_data(client: TestClient, mock_oauth: OAuthProvider):
-  response = client.get("/callback", params={'code': TEST_AUTH_CODE})
+  response = client.get("/callback", params={
+    'code': TEST_AUTH_CODE,
+    'state': TEST_VALID_STATE,
+  })
 
   assert response.status_code == 200
   mock_oauth.get_user_data.assert_called_once()
@@ -63,4 +87,13 @@ def test_login_passes_state(client: TestClient, mock_oauth: OAuthProvider):
 
   assert response.status_code == 307
   mock_oauth.get_redirect_url.assert_any_call(state)
-  
+
+def test_callback_rejects_malicious_client(mal_client: TestClient, mock_oauth: OAuthProvider):
+  response = mal_client.get('/callback', params={
+    'code': TEST_AUTH_CODE,
+    'state': TEST_VALID_STATE,
+  })
+
+  assert response.status_code == 403
+  mock_oauth.get_access_token.assert_not_called()
+  mock_oauth.get_user_data.assert_not_called()

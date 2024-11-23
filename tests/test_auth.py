@@ -55,7 +55,7 @@ def test_login_redirects(client: TestClient, mock_oauth: OAuthProvider):
   assert response.headers["location"] == TEST_REDIRECT_URI
   mock_oauth.get_redirect_url.assert_called_once()
 
-def test_callback_uses_auth_code(client: TestClient, mock_oauth: OAuthProvider):
+def test_callback_gets_access_token(client: TestClient, mock_oauth: OAuthProvider):
   response = client.get("/callback", params={
     'code': TEST_AUTH_CODE,
     'state': TEST_VALID_STATE,
